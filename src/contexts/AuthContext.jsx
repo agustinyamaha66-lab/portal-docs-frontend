@@ -9,12 +9,24 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      if (u && !u.email?.endsWith('@valdishopper.com')) {
+        supabase.auth.signOut()
+        setUser(null)
+      } else {
+        setUser(u)
+      }
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      if (u && !u.email?.endsWith('@valdishopper.com')) {
+        supabase.auth.signOut()
+        setUser(null)
+      } else {
+        setUser(u)
+      }
     })
 
     return () => subscription.unsubscribe()

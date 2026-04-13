@@ -1,20 +1,23 @@
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function Login() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (user) navigate('/')
   }, [user])
 
   const handleLogin = async () => {
+    setError('')
     try {
       await login()
     } catch (e) {
       console.error(e)
+      setError('Acceso denegado. Solo cuentas @valdishopper.com.')
     }
   }
 
@@ -56,6 +59,16 @@ export default function Login() {
           Acceso exclusivo para cuentas<br />
           <strong style={{ color: 'var(--vs-navy)' }}>@valdishopper.com</strong>
         </p>
+
+        {error && (
+          <div style={{
+            background: '#FEF2F2', border: '1px solid #FCA5A5',
+            borderRadius: 'var(--vs-radius-md)', padding: '10px 14px',
+            fontSize: '12px', color: '#DC2626', marginBottom: '16px'
+          }}>
+            {error}
+          </div>
+        )}
 
         <button className="btn-primary" onClick={handleLogin} style={{ width: '100%', justifyContent: 'center', padding: '12px' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
