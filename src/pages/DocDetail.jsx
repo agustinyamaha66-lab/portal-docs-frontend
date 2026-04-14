@@ -4,8 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import UploadModal from '../components/UploadModal'
 import Toast from '../components/Toast'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { supabase } from '../supabase'
 
 const STATUS_LABEL = { active: 'Activo', dev: 'En desarrollo', archived: 'Archivado' }
 const STATUS_STYLE = {
@@ -26,14 +25,14 @@ export default function DocDetail() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE}/documentos/${id}`)
-        const data = await res.json()
+        const { data, error } = await supabase
+          .from('documentos')
+          .select('*')
+          .eq('id', id)
+          .single()
+        if (error) throw error
         setDoc(data)
-
-        if (data.file_url) {
-          const r = await fetch(data.file_url)
-          setContent(await r.text())
-        }
+        if (data.content) setContent(data.content)
       } catch (e) {
         console.error(e)
       } finally {
@@ -43,9 +42,8 @@ export default function DocDetail() {
     load()
   }, [id])
 
-  const handleDownloadMd = async () => {
-    const res = await fetch(doc.file_url)
-    const blob = await res.blob()
+  const handleDownloadMd = () => {
+    const blob = new Blob([content], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -54,25 +52,23 @@ export default function DocDetail() {
     URL.revokeObjectURL(url)
   }
 
-  const handleDownloadPdf = () => {
-    window.open(`${API_BASE}/documentos/${id}/pdf`, '_blank')
-  }
-
   const handleEdit = async (payload) => {
-    const formData = new FormData()
-    formData.append('title', payload.title)
-    formData.append('desc', payload.desc)
-    formData.append('tab', payload.tab)
-    formData.append('tags', JSON.stringify(payload.tags))
-    formData.append('status', payload.status)
-    if (payload.content) {
-      const blob = new Blob([payload.content], { type: 'text/markdown' })
-      formData.append('file', blob, payload.filename)
+    const updates = {
+      title: payload.title,
+      descripcion: payload.desc,
+      tab: payload.tab,
+      tags: payload.tags,
+      status: payload.status,
     }
-    const res = await fetch(`${API_BASE}/documentos/${id}`, { method: 'PATCH', body: formData })
-    if (!res.ok) throw new Error('Error al actualizar')
-    const updated = await res.json()
-    setDoc(updated)
+    if (payload.content) updates.content = payload.content
+    const { data, error } = await supabase
+      .from('documentos')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw new Error('Error al actualizar')
+    setDoc(data)
     if (payload.content) setContent(payload.content)
     setToast({ message: '✓ Documento actualizado correctamente', type: 'success' })
   }
@@ -135,7 +131,7 @@ export default function DocDetail() {
           {doc.title}
         </div>
         <div style={{ fontSize: '13px', color: 'var(--vs-gray-mid)', marginBottom: '16px', lineHeight: 1.6 }}>
-          {doc.desc}
+          {doc.descripcion}
         </div>
 
         {doc.tags?.length > 0 && (
@@ -175,15 +171,6 @@ export default function DocDetail() {
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
                 .md
-              </button>
-            )}
-            {content && (
-              <button className="btn-primary" onClick={handleDownloadPdf} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                </svg>
-                PDF
               </button>
             )}
           </div>

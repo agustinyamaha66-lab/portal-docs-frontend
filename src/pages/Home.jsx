@@ -4,6 +4,8 @@ import UploadModal from '../components/UploadModal'
 import ScriptUploadModal from '../components/ScriptUploadModal'
 import Toast from '../components/Toast'
 import ProcesoAnalizar from '../components/ProcesoAnalizar'
+import { supabase } from '../supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const TABS = [
   { value: 'proyectos', label: 'Proyectos' },
@@ -57,8 +59,6 @@ const ICON_COLOR = {
   finanzas: '#1565C0'
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
 function DocIcon({ colorKey }) {
   const color = ICON_COLOR[colorKey] || ICON_COLOR.proyectos
   return (
@@ -89,6 +89,7 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false)
   const [toast, setToast] = useState(null)
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const hasSubtabs = TABS_WITH_SUBTABS.includes(activeTab)
   const currentSubtab = hasSubtabs ? activeSubtab : null
@@ -100,12 +101,11 @@ export default function Home() {
   const fetchDocs = async (tab, subtab) => {
     setLoading(true)
     try {
-      const url = subtab
-        ? `${API_BASE}/documentos?tab=${tab}&subtab=${subtab}`
-        : `${API_BASE}/documentos?tab=${tab}`
-      const res = await fetch(url)
-      const data = await res.json()
-      setDocs(data)
+      let query = supabase.from('documentos').select('*').eq('tab', tab)
+      if (subtab) query = query.eq('subtab', subtab)
+      const { data, error } = await query.order('created_at', { ascending: false })
+      if (error) throw error
+      setDocs(data || [])
     } catch (e) {
       console.error(e)
       setDocs([])
@@ -115,25 +115,24 @@ export default function Home() {
   }
 
   const handleUpload = async (payload) => {
-    const formData = new FormData()
-    formData.append('title', payload.title)
-    formData.append('desc', payload.desc)
-    formData.append('tab', payload.tab)
-    if (payload.subtab) formData.append('subtab', payload.subtab)
-    formData.append('tags', JSON.stringify(payload.tags))
-    formData.append('status', payload.status)
-    const blob = new Blob([payload.content], { type: 'text/markdown' })
-    formData.append('file', blob, payload.filename)
-
-    const res = await fetch(`${API_BASE}/documentos`, { method: 'POST', body: formData })
-    if (!res.ok) throw new Error('Error al subir')
+    const { error } = await supabase.from('documentos').insert({
+      title: payload.title,
+      descripcion: payload.desc,
+      tab: payload.tab,
+      subtab: payload.subtab || null,
+      tags: payload.tags,
+      status: payload.status,
+      content: payload.content,
+      author: user?.email
+    })
+    if (error) throw new Error('Error al subir')
     setToast({ message: '✓ Documento publicado correctamente', type: 'success' })
     fetchDocs(activeTab, currentSubtab)
   }
 
   const filtered = docs.filter(d =>
     !search || d.title.toLowerCase().includes(search.toLowerCase()) ||
-    d.desc.toLowerCase().includes(search.toLowerCase()) ||
+    d.descripcion?.toLowerCase().includes(search.toLowerCase()) ||
     d.tags?.some(t => t.toLowerCase().includes(search.toLowerCase()))
   )
 
@@ -398,7 +397,7 @@ function DocCard({ doc, colorKey, isScript = false, onClick }) {
         {doc.title}
       </div>
       <div style={{ fontSize: '12px', color: 'var(--vs-gray-mid)', lineHeight: 1.6, marginBottom: '14px' }}>
-        {doc.desc}
+        {doc.descripcion}
       </div>
 
       {doc.tags?.length > 0 && (

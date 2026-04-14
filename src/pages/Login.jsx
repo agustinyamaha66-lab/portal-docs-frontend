@@ -11,6 +11,16 @@ export default function Login() {
     if (user) navigate('/')
   }, [user])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const errorCode = params.get('error_code')
+    if (errorCode === 'bad_oauth_state') {
+      setError('La sesión de login expiró. Por favor intentá de nuevo.')
+    } else if (params.get('error')) {
+      setError('Error al iniciar sesión. Por favor intentá de nuevo.')
+    }
+  }, [])
+
   const handleLogin = async () => {
     setError('')
     try {
