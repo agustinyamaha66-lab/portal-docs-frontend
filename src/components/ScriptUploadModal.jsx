@@ -325,10 +325,9 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
                       onClick={() => setResponsable(user.email?.split('@')[0] || '')}
                       style={{
                         position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
-                        background: 'none', border: 'none', cursor: 'pointer',
+                        background: 'var(--vs-navy-subtle)', border: 'none', cursor: 'pointer',
                         fontSize: '10px', fontWeight: 600, color: 'var(--vs-navy-muted)',
-                        padding: '2px 6px', borderRadius: 'var(--vs-radius-pill)',
-                        background: 'var(--vs-navy-subtle)'
+                        padding: '2px 6px', borderRadius: 'var(--vs-radius-pill)'
                       }}
                     >
                       Soy yo
