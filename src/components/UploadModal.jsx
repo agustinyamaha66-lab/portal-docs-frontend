@@ -11,7 +11,7 @@ const TABS_WITH_SUBTABS = ['proyectos', 'scripts']
 
 export default function UploadModal({ defaultTab, defaultSubtab, onClose, onUpload, editDoc }) {
   const [title, setTitle] = useState(editDoc?.title || '')
-  const [desc, setDesc] = useState(editDoc?.desc || '')
+  const [desc, setDesc] = useState(editDoc?.descripcion || editDoc?.desc || '')
   const [tab, setTab] = useState(editDoc?.tab || defaultTab || 'proyectos')
   const [subtab, setSubtab] = useState(editDoc?.subtab || defaultSubtab || 'cco')
   const [status, setStatus] = useState(editDoc?.status || 'active')

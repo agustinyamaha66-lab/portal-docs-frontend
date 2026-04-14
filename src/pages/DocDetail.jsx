@@ -56,7 +56,8 @@ export default function DocDetail() {
     const element = document.querySelector('.md-content')
     if (!element) return
     const { default: html2canvas } = await import('html2canvas')
-    const { default: jsPDF } = await import('jspdf')
+    const jspdfModule = await import('jspdf')
+    const jsPDF = jspdfModule.jsPDF || jspdfModule.default
     const canvas = await html2canvas(element, { scale: 2, useCORS: true })
     const imgData = canvas.toDataURL('image/png')
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
