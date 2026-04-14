@@ -131,6 +131,16 @@ export default function Home() {
     }
   }
 
+  const handleDelete = async (docId) => {
+    const { error } = await supabase.from('documentos').delete().eq('id', docId)
+    if (error) {
+      setToast({ message: 'Error al eliminar el documento', type: 'error' })
+      return
+    }
+    setToast({ message: '✓ Documento eliminado', type: 'success' })
+    fetchDocs(activeTab, currentSubtab)
+  }
+
   const handleUpload = async (payload) => {
     const { error } = await supabase.from('documentos').insert({
       title: payload.title,
@@ -243,7 +253,7 @@ export default function Home() {
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
                   {docs.map(doc => (
-                    <DocCard key={doc.id} doc={doc} colorKey="procesos" onClick={() => navigate(`/doc/${doc.id}`)} />
+                    <DocCard key={doc.id} doc={doc} colorKey="procesos" onClick={() => navigate(`/doc/${doc.id}`)} onDelete={handleDelete} />
                   ))}
                 </div>
               )}
@@ -363,6 +373,7 @@ export default function Home() {
                     colorKey={colorKey}
                     isScript={activeTab === 'scripts'}
                     onClick={() => navigate(`/doc/${doc.id}`)}
+                    onDelete={handleDelete}
                   />
                 )
               })}
@@ -395,21 +406,36 @@ export default function Home() {
   )
 }
 
-function DocCard({ doc, colorKey, isScript = false, onClick }) {
+function DocCard({ doc, colorKey, isScript = false, onClick, onDelete }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDeleteClick = async (e) => {
+    e.stopPropagation()
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setDeleting(true)
+    await onDelete(doc.id)
+  }
+
+  const handleCancelDelete = (e) => {
+    e.stopPropagation()
+    setConfirmDelete(false)
+  }
+
   return (
     <div
       onClick={onClick}
       style={{
         background: 'var(--vs-white)', borderRadius: 'var(--vs-radius-lg)',
-        border: '0.5px solid #D0D5E8', padding: '20px',
-        boxShadow: 'var(--vs-shadow-sm)', cursor: 'pointer',
-        transition: 'box-shadow 0.2s, transform 0.15s',
+        border: confirmDelete ? '1px solid #FCA5A5' : '0.5px solid #D0D5E8',
+        padding: '20px', boxShadow: 'var(--vs-shadow-sm)', cursor: 'pointer',
+        transition: 'box-shadow 0.2s, transform 0.15s, border-color 0.2s',
         position: 'relative', overflow: 'hidden'
       }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--vs-shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+      onMouseEnter={e => { if (!confirmDelete) { e.currentTarget.style.boxShadow = 'var(--vs-shadow-md)'; e.currentTarget.style.transform = 'translateY(-2px)' } }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--vs-shadow-sm)'; e.currentTarget.style.transform = 'translateY(0)' }}
     >
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: ACCENT_COLOR[colorKey] || ACCENT_COLOR.proyectos }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: confirmDelete ? '#FCA5A5' : (ACCENT_COLOR[colorKey] || ACCENT_COLOR.proyectos) }} />
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '10px' }}>
         <div style={{
@@ -460,9 +486,59 @@ function DocCard({ doc, colorKey, isScript = false, onClick }) {
         }}>
           {doc.author?.split('@')[0] || 'Equipo'}
         </span>
-        <span style={{ fontSize: '11px', color: 'var(--vs-gray-mid)' }}>
-          {doc.created_at ? new Date(doc.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-        </span>
+
+        {confirmDelete ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#DC2626' }}>¿Eliminar?</span>
+            <button
+              onClick={handleDeleteClick}
+              disabled={deleting}
+              style={{
+                fontSize: '11px', fontWeight: 700, padding: '3px 10px',
+                borderRadius: 'var(--vs-radius-pill)', border: 'none',
+                background: '#DC2626', color: 'white', cursor: 'pointer',
+                opacity: deleting ? 0.6 : 1
+              }}
+            >
+              {deleting ? '...' : 'Sí'}
+            </button>
+            <button
+              onClick={handleCancelDelete}
+              style={{
+                fontSize: '11px', fontWeight: 600, padding: '3px 8px',
+                borderRadius: 'var(--vs-radius-pill)', border: '1px solid #D0D5E8',
+                background: 'white', color: 'var(--vs-gray-mid)', cursor: 'pointer'
+              }}
+            >
+              No
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--vs-gray-mid)' }}>
+              {doc.created_at ? new Date(doc.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+            </span>
+            <button
+              onClick={handleDeleteClick}
+              title="Eliminar documento"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--vs-gray-mid)', padding: '2px', display: 'flex',
+                borderRadius: 'var(--vs-radius-sm)',
+                transition: 'color 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = '#DC2626'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--vs-gray-mid)'}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -37,6 +37,8 @@ export default function DocDetail() {
   const [showEdit, setShowEdit] = useState(false)
   const [showUpdate, setShowUpdate] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -109,6 +111,17 @@ export default function DocDetail() {
     setDoc(data)
     if (payload.content) setContent(payload.content)
     setToast({ message: '✓ Documento actualizado correctamente', type: 'success' })
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    const { error } = await supabase.from('documentos').delete().eq('id', id)
+    if (error) {
+      setDeleting(false)
+      setToast({ message: 'Error al eliminar el documento', type: 'error' })
+      return
+    }
+    navigate('/')
   }
 
   const handleVersionUpdate = async ({ content: newContent, changelog, version, version_history }) => {
@@ -283,7 +296,64 @@ export default function DocDetail() {
               <span>{new Date(doc.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Confirmación de borrado inline */}
+            {confirmDelete && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                background: '#FEF2F2', border: '1px solid #FCA5A5',
+                borderRadius: 'var(--vs-radius-pill)', padding: '4px 12px 4px 10px',
+                fontSize: '12px', color: '#DC2626', fontWeight: 600
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                ¿Eliminar definitivamente?
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{
+                    background: '#DC2626', color: 'white', border: 'none', cursor: 'pointer',
+                    fontSize: '11px', fontWeight: 700, padding: '3px 10px',
+                    borderRadius: 'var(--vs-radius-pill)', opacity: deleting ? 0.6 : 1
+                  }}
+                >
+                  {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '11px', fontWeight: 600, color: '#DC2626', padding: '2px 4px'
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+            {/* Botón Eliminar */}
+            {!confirmDelete && (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  fontSize: '12px', padding: '6px 14px',
+                  background: 'none', border: '1px solid #FCA5A5',
+                  borderRadius: 'var(--vs-radius-pill)', cursor: 'pointer',
+                  color: '#DC2626', fontWeight: 600
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+                Eliminar
+              </button>
+            )}
+
             {/* Botón Actualizar documentación (solo scripts) */}
             {isScript && content && (
               <button
