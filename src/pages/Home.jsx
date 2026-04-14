@@ -7,6 +7,9 @@ import ProcesoAnalizar from '../components/ProcesoAnalizar'
 import { supabase } from '../supabase'
 import { useAuth } from '../contexts/AuthContext'
 
+const DAILY_LIMIT = 3
+const UNLIMITED_USERS = ['agustin.williamson@valdishopper.com']
+
 const TABS = [
   { value: 'proyectos', label: 'Proyectos' },
   { value: 'scripts', label: 'Scripts' },
@@ -88,8 +91,22 @@ export default function Home() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [toast, setToast] = useState(null)
+  const [scriptsTodayCount, setScriptsTodayCount] = useState(null)
   const navigate = useNavigate()
   const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user?.email || UNLIMITED_USERS.includes(user.email)) return
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    supabase
+      .from('documentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('tab', 'scripts')
+      .eq('author', user.email)
+      .gte('created_at', todayStart.toISOString())
+      .then(({ count }) => setScriptsTodayCount(count ?? 0))
+  }, [user?.email])
 
   const hasSubtabs = TABS_WITH_SUBTABS.includes(activeTab)
   const currentSubtab = hasSubtabs ? activeSubtab : null
@@ -252,16 +269,31 @@ export default function Home() {
 
             {/* Botón diferente según tab */}
             {activeTab === 'scripts' ? (
-              <button
-                className="btn-primary"
-                onClick={() => setShowModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--vs-success)', borderColor: 'var(--vs-success)' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 3l1.88 5.47L19 10l-5.12 1.53L12 17l-1.88-5.47L5 10l5.12-1.53z"/>
-                </svg>
-                Documentar script con IA
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                <button
+                  className="btn-primary"
+                  onClick={() => setShowModal(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--vs-success)', borderColor: 'var(--vs-success)' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 3l1.88 5.47L19 10l-5.12 1.53L12 17l-1.88-5.47L5 10l5.12-1.53z"/>
+                  </svg>
+                  Documentar script con IA
+                </button>
+                {scriptsTodayCount !== null && (
+                  <span style={{
+                    fontSize: '11px', fontWeight: 600,
+                    color: scriptsTodayCount >= DAILY_LIMIT ? '#DC2626'
+                      : scriptsTodayCount >= DAILY_LIMIT - 1 ? '#D97706'
+                      : 'var(--vs-gray-mid)'
+                  }}>
+                    {scriptsTodayCount >= DAILY_LIMIT
+                      ? '⛔ Límite diario alcanzado'
+                      : `${scriptsTodayCount}/${DAILY_LIMIT} generaciones usadas hoy`
+                    }
+                  </span>
+                )}
+              </div>
             ) : (
               <button className="btn-primary" onClick={() => setShowModal(true)}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

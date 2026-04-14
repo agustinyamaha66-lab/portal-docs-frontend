@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
 
 const DAILY_LIMIT = 3
+const UNLIMITED_USERS = ['agustin.williamson@valdishopper.com']
 
 const AREA_SUBTABS = [
   { value: 'cco', label: 'CCO' },
@@ -123,6 +124,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
 
   const checkDailyLimit = async () => {
     if (!user?.email) return false
+    if (UNLIMITED_USERS.includes(user.email)) return false
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
     const { count, error } = await supabase
@@ -205,7 +207,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
             </div>
             <div style={{ fontSize: '12px', color: 'var(--vs-gray-mid)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               Sube tu script y Claude genera la documentación automáticamente
-              {todayCount !== null && (
+              {todayCount !== null && !UNLIMITED_USERS.includes(user?.email) && (
                 <span style={{
                   fontSize: '11px', fontWeight: 700, padding: '2px 8px',
                   borderRadius: 'var(--vs-radius-pill)',
