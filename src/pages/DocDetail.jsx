@@ -52,6 +52,26 @@ export default function DocDetail() {
     URL.revokeObjectURL(url)
   }
 
+  const handleDownloadPdf = async () => {
+    const element = document.querySelector('.md-content')
+    if (!element) return
+    const { default: html2canvas } = await import('html2canvas')
+    const { default: jsPDF } = await import('jspdf')
+    const canvas = await html2canvas(element, { scale: 2, useCORS: true })
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pdfWidth = pdf.internal.pageSize.getWidth()
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width
+    let y = 0
+    const pageHeight = pdf.internal.pageSize.getHeight()
+    while (y < pdfHeight) {
+      pdf.addImage(imgData, 'PNG', 0, -y, pdfWidth, pdfHeight)
+      y += pageHeight
+      if (y < pdfHeight) pdf.addPage()
+    }
+    pdf.save(`${doc.title}.pdf`)
+  }
+
   const handleEdit = async (payload) => {
     const updates = {
       title: payload.title,
@@ -163,7 +183,7 @@ export default function DocDetail() {
               </svg>
               Editar
             </button>
-            {doc.file_url && (
+            {content && (
               <button className="btn-secondary" onClick={handleDownloadMd} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -171,6 +191,15 @@ export default function DocDetail() {
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
                 .md
+              </button>
+            )}
+            {content && (
+              <button className="btn-primary" onClick={handleDownloadPdf} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                PDF
               </button>
             )}
           </div>
