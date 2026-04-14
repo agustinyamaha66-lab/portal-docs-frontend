@@ -40,6 +40,7 @@ export default function DocDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState(null)
+  const [activeFileIdx, setActiveFileIdx] = useState(0)
 
   useEffect(() => {
     const load = async () => {
@@ -503,6 +504,105 @@ export default function DocDetail() {
           </div>
         )}
       </div>
+
+      {/* Archivos fuente (proyectos multi-archivo) */}
+      {Array.isArray(doc.files) && doc.files.length > 0 && (
+        <div style={{
+          background: 'var(--vs-white)', borderRadius: 'var(--vs-radius-lg)',
+          border: '0.5px solid #D0D5E8', marginTop: '16px', overflow: 'hidden'
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '14px 20px', borderBottom: '0.5px solid #EEF1F8',
+            display: 'flex', alignItems: 'center', gap: '8px'
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vs-success)" strokeWidth="2">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--vs-navy)' }}>
+              Archivos del proyecto
+            </span>
+            <span style={{
+              fontSize: '10px', fontWeight: 600, padding: '2px 8px',
+              borderRadius: 'var(--vs-radius-pill)',
+              background: '#E8F5E9', color: 'var(--vs-success)'
+            }}>
+              {doc.files.length} archivo{doc.files.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Pestañas */}
+          <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', padding: '0 16px', borderBottom: '1.5px solid #D0D5E8', background: '#FAFBFE' }}>
+            {doc.files.map((f, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveFileIdx(idx)}
+                style={{
+                  padding: '8px 14px', cursor: 'pointer', flexShrink: 0,
+                  borderRadius: 'var(--vs-radius-sm) var(--vs-radius-sm) 0 0',
+                  background: activeFileIdx === idx ? 'white' : 'transparent',
+                  border: activeFileIdx === idx ? '1.5px solid #D0D5E8' : '1.5px solid transparent',
+                  borderBottom: activeFileIdx === idx ? '1.5px solid white' : 'none',
+                  marginBottom: activeFileIdx === idx ? '-1.5px' : '0',
+                  fontSize: '12px', fontWeight: 600,
+                  color: activeFileIdx === idx ? 'var(--vs-navy)' : 'var(--vs-gray-mid)',
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  transition: 'color 0.15s'
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                {f.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Contenido del archivo activo */}
+          <div style={{ padding: '16px 20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontSize: '11px', color: 'var(--vs-gray-mid)', fontWeight: 600 }}>
+                {doc.files[activeFileIdx]?.content?.trim().split('\n').length || 0} líneas
+              </span>
+              <button
+                onClick={() => {
+                  const f = doc.files[activeFileIdx]
+                  const blob = new Blob([f.content], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = f.name
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                style={{
+                  fontSize: '11px', fontWeight: 600, padding: '3px 10px',
+                  borderRadius: 'var(--vs-radius-pill)', border: '1px solid #D0D5E8',
+                  background: 'white', color: 'var(--vs-navy-muted)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '4px'
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Descargar {doc.files[activeFileIdx]?.name}
+              </button>
+            </div>
+            <pre style={{
+              margin: 0, padding: '16px', overflowX: 'auto',
+              background: '#F8F9FC', borderRadius: 'var(--vs-radius-md)',
+              border: '0.5px solid #D0D5E8',
+              fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.7,
+              color: 'var(--vs-navy)', whiteSpace: 'pre'
+            }}>
+              {doc.files[activeFileIdx]?.content || ''}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {showEdit && (
         <UploadModal

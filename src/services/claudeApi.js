@@ -246,10 +246,26 @@ INSTRUCCIONES CRÍTICAS:
 5. Si no detectás cambios significativos, indicarlo en el changelog
 6. Sé específico con los cambios reales, nunca genérico`
 
+// ─── PROMPT PARA DOCUMENTACIÓN DE PROYECTOS MULTI-ARCHIVO ──────────────────
+// Recibe un array de {name, content} y construye el prompt con todos los archivos
+const buildMultiScriptPrompt = (files) => {
+  const filesBlock = files
+    .map(f => `--- ${f.name} ---\n${f.content}`)
+    .join('\n\n')
+
+  return `${SCRIPT_DOC_PROMPT}Este proyecto está compuesto por ${files.length} archivo${files.length !== 1 ? 's' : ''}. Analizá el conjunto completo y generá una documentación técnica unificada que cubra el proyecto como un todo, mencionando el rol de cada archivo.
+
+${filesBlock}`
+}
+
 // ─── EXPORTS ────────────────────────────────────────────────────────────────
 
 export async function generateScriptDocs(scriptContent) {
   return callClaude(SCRIPT_DOC_PROMPT + scriptContent, 4096)
+}
+
+export async function generateMultiScriptDocs(files) {
+  return callClaude(buildMultiScriptPrompt(files), 6000)
 }
 
 export async function generateProcessDocs(formData) {

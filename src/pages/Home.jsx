@@ -156,7 +156,8 @@ export default function Home() {
       frecuencia: payload.frecuencia || null,
       criticidad: payload.criticidad || null,
       version: 1,
-      version_history: []
+      version_history: [],
+      files: payload.files || null,
     })
     if (error) throw new Error('Error al subir')
     setToast({ message: '✓ Documento publicado correctamente', type: 'success' })

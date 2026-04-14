@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { generateScriptDocs } from '../services/claudeApi'
+import { generateScriptDocs, generateMultiScriptDocs } from '../services/claudeApi'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../supabase'
 
@@ -119,6 +119,11 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
   const [frecuencia, setFrecuencia] = useState('')
   const [criticidad, setCriticidad] = useState('')
 
+  // Modo multi-archivo
+  const [isMultiFile, setIsMultiFile] = useState(false)
+  const [projectFiles, setProjectFiles] = useState([{ name: 'Code.gs', content: '' }])
+  const [activeFileIdx, setActiveFileIdx] = useState(0)
+
   // Preview mode en step 3
   const [previewMode, setPreviewMode] = useState('edit')
 
@@ -138,9 +143,11 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
   }
 
   const handleGenerate = async () => {
-    if (!scriptContent.trim() || !title.trim() || !desc.trim()) return
+    const hasContent = isMultiFile
+      ? projectFiles.some(f => f.content.trim()) && projectFiles.every(f => f.name.trim())
+      : scriptContent.trim()
+    if (!hasContent || !title.trim() || !desc.trim()) return
     setError('')
-    // Verificar límite diario antes de llamar a Claude
     const limitReached = await checkDailyLimit()
     if (limitReached) {
       setError(`Límite diario alcanzado: podés generar hasta ${DAILY_LIMIT} documentos por día. Intentá nuevamente mañana.`)
@@ -148,9 +155,15 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
     }
     setStep('generating')
     try {
-      const { text, usage } = await generateScriptDocs(scriptContent)
-      setGeneratedMd(text)
-      setUsage(usage)
+      let result
+      if (isMultiFile) {
+        const filledFiles = projectFiles.filter(f => f.content.trim())
+        result = await generateMultiScriptDocs(filledFiles)
+      } else {
+        result = await generateScriptDocs(scriptContent)
+      }
+      setGeneratedMd(result.text)
+      setUsage(result.usage)
       setPreviewMode('edit')
       setStep('preview')
     } catch (e) {
@@ -176,6 +189,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
         responsable: responsable || null,
         frecuencia: frecuencia || null,
         criticidad: criticidad || null,
+        files: isMultiFile ? projectFiles.filter(f => f.content.trim()) : null,
       })
       onClose()
     } catch (e) {
@@ -235,33 +249,172 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
         {step === 'upload' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-            <div>
-              <label style={labelStyle}>
-                Pegá tu script acá *
-                <span style={{ fontWeight: 400, color: 'var(--vs-gray-mid)', marginLeft: '6px' }}>
-                  (.py, .js, .sql, .sh, .go, o cualquier otro lenguaje)
-                </span>
-              </label>
-              <textarea
-                value={scriptContent}
-                onChange={e => setScriptContent(e.target.value)}
-                placeholder={`# Pegá el código de tu script acá\n# Funciona con Python, JavaScript, SQL, Shell, Go, Ruby, R y más...`}
-                style={{
-                  minHeight: '180px', resize: 'vertical',
-                  fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.65,
-                  background: scriptContent ? '#F8F9FC' : 'transparent',
-                  border: `1.5px solid ${scriptContent.trim() ? 'var(--vs-success)' : '#D0D5E8'}`,
-                  borderRadius: 'var(--vs-radius-md)', padding: '14px',
-                  color: 'var(--vs-navy)', boxSizing: 'border-box', width: '100%',
-                  transition: 'border-color 0.2s'
-                }}
-              />
-              {scriptContent.trim() && (
-                <div style={{ fontSize: '11px', color: 'var(--vs-success)', marginTop: '5px', fontWeight: 600 }}>
-                  ✓ {scriptContent.trim().split('\n').length} líneas listas para analizar
-                </div>
-              )}
+            {/* Toggle: script único / multi-archivo */}
+            <div style={{ display: 'flex', background: 'var(--vs-navy-subtle)', borderRadius: 'var(--vs-radius-pill)', padding: '3px', alignSelf: 'flex-start' }}>
+              {[
+                { key: false, label: 'Script único' },
+                { key: true, label: 'Proyecto multi-archivo' }
+              ].map(opt => (
+                <button
+                  key={String(opt.key)}
+                  onClick={() => { setIsMultiFile(opt.key); setError('') }}
+                  style={{
+                    fontSize: '12px', fontWeight: 600, padding: '5px 16px',
+                    borderRadius: 'var(--vs-radius-pill)', border: 'none', cursor: 'pointer',
+                    background: isMultiFile === opt.key ? 'var(--vs-navy)' : 'transparent',
+                    color: isMultiFile === opt.key ? 'white' : 'var(--vs-navy-muted)',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+
+            {/* Modo: script único */}
+            {!isMultiFile && (
+              <div>
+                <label style={labelStyle}>
+                  Pegá tu script acá *
+                  <span style={{ fontWeight: 400, color: 'var(--vs-gray-mid)', marginLeft: '6px' }}>
+                    (.py, .js, .sql, .sh, .go, o cualquier otro lenguaje)
+                  </span>
+                </label>
+                <textarea
+                  value={scriptContent}
+                  onChange={e => setScriptContent(e.target.value)}
+                  placeholder={`# Pegá el código de tu script acá\n# Funciona con Python, JavaScript, SQL, Shell, Go, Ruby, R y más...`}
+                  style={{
+                    minHeight: '180px', resize: 'vertical',
+                    fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.65,
+                    background: scriptContent ? '#F8F9FC' : 'transparent',
+                    border: `1.5px solid ${scriptContent.trim() ? 'var(--vs-success)' : '#D0D5E8'}`,
+                    borderRadius: 'var(--vs-radius-md)', padding: '14px',
+                    color: 'var(--vs-navy)', boxSizing: 'border-box', width: '100%',
+                    transition: 'border-color 0.2s'
+                  }}
+                />
+                {scriptContent.trim() && (
+                  <div style={{ fontSize: '11px', color: 'var(--vs-success)', marginTop: '5px', fontWeight: 600 }}>
+                    ✓ {scriptContent.trim().split('\n').length} líneas listas para analizar
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modo: proyecto multi-archivo */}
+            {isMultiFile && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>
+                    Archivos del proyecto *
+                    <span style={{ fontWeight: 400, color: 'var(--vs-gray-mid)', marginLeft: '6px' }}>
+                      (.gs, .html, .js, .py, etc.)
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjectFiles(prev => [...prev, { name: 'Archivo.gs', content: '' }])
+                      setActiveFileIdx(projectFiles.length)
+                    }}
+                    style={{
+                      fontSize: '11px', fontWeight: 700, padding: '4px 12px',
+                      borderRadius: 'var(--vs-radius-pill)', border: '1.5px dashed var(--vs-success)',
+                      background: '#F1FBF4', color: 'var(--vs-success)', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '5px'
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Agregar archivo
+                  </button>
+                </div>
+
+                {/* Pestañas de archivos */}
+                <div style={{ display: 'flex', gap: '2px', overflowX: 'auto', marginBottom: '0', borderBottom: '1.5px solid #D0D5E8' }}>
+                  {projectFiles.map((f, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setActiveFileIdx(idx)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '7px 12px', cursor: 'pointer', flexShrink: 0,
+                        borderRadius: 'var(--vs-radius-sm) var(--vs-radius-sm) 0 0',
+                        background: activeFileIdx === idx ? 'white' : 'var(--vs-navy-subtle)',
+                        border: activeFileIdx === idx ? '1.5px solid #D0D5E8' : '1.5px solid transparent',
+                        borderBottom: activeFileIdx === idx ? '1.5px solid white' : 'none',
+                        marginBottom: activeFileIdx === idx ? '-1.5px' : '0',
+                        fontSize: '12px', fontWeight: 600,
+                        color: activeFileIdx === idx ? 'var(--vs-navy)' : 'var(--vs-gray-mid)'
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      {f.name || `Archivo ${idx + 1}`}
+                      {projectFiles.length > 1 && (
+                        <span
+                          onClick={e => {
+                            e.stopPropagation()
+                            const updated = projectFiles.filter((_, i) => i !== idx)
+                            setProjectFiles(updated)
+                            setActiveFileIdx(Math.min(activeFileIdx, updated.length - 1))
+                          }}
+                          style={{
+                            marginLeft: '2px', color: 'var(--vs-gray-mid)', lineHeight: 1,
+                            fontSize: '13px', fontWeight: 400, cursor: 'pointer'
+                          }}
+                        >×</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Editor del archivo activo */}
+                <div style={{ border: '1.5px solid #D0D5E8', borderTop: 'none', borderRadius: '0 0 var(--vs-radius-md) var(--vs-radius-md)', background: 'white', padding: '12px' }}>
+                  <input
+                    value={projectFiles[activeFileIdx]?.name || ''}
+                    onChange={e => {
+                      const updated = [...projectFiles]
+                      updated[activeFileIdx] = { ...updated[activeFileIdx], name: e.target.value }
+                      setProjectFiles(updated)
+                    }}
+                    placeholder="nombre_archivo.gs"
+                    style={{
+                      fontSize: '12px', fontFamily: 'monospace', fontWeight: 600,
+                      marginBottom: '8px', padding: '5px 10px',
+                      border: '1px solid #D0D5E8', borderRadius: 'var(--vs-radius-sm)',
+                      color: 'var(--vs-navy)', width: '200px'
+                    }}
+                  />
+                  <textarea
+                    value={projectFiles[activeFileIdx]?.content || ''}
+                    onChange={e => {
+                      const updated = [...projectFiles]
+                      updated[activeFileIdx] = { ...updated[activeFileIdx], content: e.target.value }
+                      setProjectFiles(updated)
+                    }}
+                    placeholder={`// Pegá el contenido de ${projectFiles[activeFileIdx]?.name || 'este archivo'} acá`}
+                    style={{
+                      minHeight: '200px', resize: 'vertical', width: '100%',
+                      fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.65,
+                      background: projectFiles[activeFileIdx]?.content ? '#F8F9FC' : 'transparent',
+                      border: `1.5px solid ${projectFiles[activeFileIdx]?.content?.trim() ? 'var(--vs-success)' : '#D0D5E8'}`,
+                      borderRadius: 'var(--vs-radius-md)', padding: '12px',
+                      color: 'var(--vs-navy)', boxSizing: 'border-box', transition: 'border-color 0.2s'
+                    }}
+                  />
+                  {projectFiles[activeFileIdx]?.content?.trim() && (
+                    <div style={{ fontSize: '11px', color: 'var(--vs-success)', marginTop: '5px', fontWeight: 600 }}>
+                      ✓ {projectFiles[activeFileIdx].content.trim().split('\n').length} líneas · {projectFiles.filter(f => f.content.trim()).length}/{projectFiles.length} archivos con contenido
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <label style={labelStyle}>Título del documento *</label>
@@ -378,9 +531,15 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
               <button
                 className="btn-primary"
                 onClick={handleGenerate}
-                disabled={!scriptContent.trim() || !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT}
+                disabled={
+                  (!isMultiFile ? !scriptContent.trim() : !projectFiles.some(f => f.content.trim())) ||
+                  !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT
+                }
                 style={{
-                  opacity: (!scriptContent.trim() || !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT) ? 0.5 : 1,
+                  opacity: (
+                    (!isMultiFile ? !scriptContent.trim() : !projectFiles.some(f => f.content.trim())) ||
+                    !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT
+                  ) ? 0.5 : 1,
                   display: 'flex', alignItems: 'center', gap: '8px'
                 }}
               >
