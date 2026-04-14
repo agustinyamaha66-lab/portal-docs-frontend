@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { generateScriptDocs } from '../services/claudeApi'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../supabase'
+
+const DAILY_LIMIT = 3
 
 const AREA_SUBTABS = [
   { value: 'cco', label: 'CCO' },
@@ -93,6 +96,21 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
   const [usage, setUsage] = useState(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [todayCount, setTodayCount] = useState(null) // null = cargando
+
+  // Cargar cuántos scripts subió hoy este usuario
+  useEffect(() => {
+    if (!user?.email) return
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    supabase
+      .from('documentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('tab', 'scripts')
+      .eq('author', user.email)
+      .gte('created_at', todayStart.toISOString())
+      .then(({ count }) => setTodayCount(count ?? 0))
+  }, [user?.email])
 
   // Nuevos campos
   const [lineaNegocio, setLineaNegocio] = useState('')
@@ -103,9 +121,29 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
   // Preview mode en step 3
   const [previewMode, setPreviewMode] = useState('edit')
 
+  const checkDailyLimit = async () => {
+    if (!user?.email) return false
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const { count, error } = await supabase
+      .from('documentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('tab', 'scripts')
+      .eq('author', user.email)
+      .gte('created_at', todayStart.toISOString())
+    if (error) return false // si falla la consulta, dejar pasar
+    return count >= DAILY_LIMIT
+  }
+
   const handleGenerate = async () => {
     if (!scriptContent.trim() || !title.trim() || !desc.trim()) return
     setError('')
+    // Verificar límite diario antes de llamar a Claude
+    const limitReached = await checkDailyLimit()
+    if (limitReached) {
+      setError(`Límite diario alcanzado: podés generar hasta ${DAILY_LIMIT} documentos por día. Intentá nuevamente mañana.`)
+      return
+    }
     setStep('generating')
     try {
       const { text, usage } = await generateScriptDocs(scriptContent)
@@ -165,8 +203,21 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
             <div style={{ fontFamily: 'var(--vs-font-title)', fontSize: '18px', fontWeight: 700, color: 'var(--vs-navy)' }}>
               Documentar script con IA
             </div>
-            <div style={{ fontSize: '12px', color: 'var(--vs-gray-mid)', marginTop: '3px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--vs-gray-mid)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               Sube tu script y Claude genera la documentación automáticamente
+              {todayCount !== null && (
+                <span style={{
+                  fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                  borderRadius: 'var(--vs-radius-pill)',
+                  background: todayCount >= DAILY_LIMIT ? '#FEF2F2' : todayCount >= DAILY_LIMIT - 1 ? '#FFFBEB' : '#F0FDF4',
+                  color: todayCount >= DAILY_LIMIT ? '#DC2626' : todayCount >= DAILY_LIMIT - 1 ? '#D97706' : '#16A34A'
+                }}>
+                  {todayCount >= DAILY_LIMIT
+                    ? 'Límite diario alcanzado'
+                    : `${DAILY_LIMIT - todayCount} generación${DAILY_LIMIT - todayCount !== 1 ? 'es' : ''} restante${DAILY_LIMIT - todayCount !== 1 ? 's' : ''} hoy`
+                  }
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--vs-gray-mid)', padding: '4px' }}>
@@ -326,9 +377,9 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
               <button
                 className="btn-primary"
                 onClick={handleGenerate}
-                disabled={!scriptContent.trim() || !title.trim() || !desc.trim()}
+                disabled={!scriptContent.trim() || !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT}
                 style={{
-                  opacity: (!scriptContent.trim() || !title.trim() || !desc.trim()) ? 0.5 : 1,
+                  opacity: (!scriptContent.trim() || !title.trim() || !desc.trim() || todayCount >= DAILY_LIMIT) ? 0.5 : 1,
                   display: 'flex', alignItems: 'center', gap: '8px'
                 }}
               >
