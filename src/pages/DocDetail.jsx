@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import UploadModal from '../components/UploadModal'
+import UpdateDocModal from '../components/UpdateDocModal'
 import Toast from '../components/Toast'
 import { supabase } from '../supabase'
 
@@ -13,6 +14,20 @@ const STATUS_STYLE = {
   archived: { background: 'var(--vs-gray-light)', color: 'var(--vs-gray-mid)' }
 }
 
+const CRITICIDAD_STYLE = {
+  Alta: { background: '#FEF2F2', color: '#DC2626' },
+  Media: { background: '#FFFBEB', color: '#D97706' },
+  Baja: { background: '#F0FDF4', color: '#16A34A' },
+}
+
+const FRECUENCIA_LABEL = {
+  '3+/dia': '3+ / día',
+  'diario': 'Diario',
+  'semanal': 'Semanal',
+  'ondemand': 'On demand',
+  'triggers': 'Triggers',
+}
+
 export default function DocDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -20,6 +35,8 @@ export default function DocDetail() {
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(true)
   const [showEdit, setShowEdit] = useState(false)
+  const [showUpdate, setShowUpdate] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -94,6 +111,19 @@ export default function DocDetail() {
     setToast({ message: '✓ Documento actualizado correctamente', type: 'success' })
   }
 
+  const handleVersionUpdate = async ({ content: newContent, changelog, version, version_history }) => {
+    const { data, error } = await supabase
+      .from('documentos')
+      .update({ content: newContent, version, version_history })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw new Error('Error al publicar la nueva versión')
+    setDoc(data)
+    setContent(newContent)
+    setToast({ message: `✓ Versión v${version} publicada correctamente`, type: 'success' })
+  }
+
   if (loading) return (
     <div style={{ padding: '48px', textAlign: 'center', color: 'var(--vs-gray-mid)', fontSize: '13px' }}>
       Cargando documento...
@@ -106,6 +136,10 @@ export default function DocDetail() {
       <button className="btn-secondary" onClick={() => navigate('/')}>Volver al portal</button>
     </div>
   )
+
+  const isScript = doc.tab === 'scripts'
+  const version = doc.version || 1
+  const history = Array.isArray(doc.version_history) ? doc.version_history : []
 
   return (
     <div style={{ padding: '28px', maxWidth: '900px', margin: '0 auto' }}>
@@ -131,6 +165,7 @@ export default function DocDetail() {
       }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '5px', background: 'var(--vs-navy)' }} />
 
+        {/* Badges de estado y sección */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginBottom: '12px', marginTop: '4px' }}>
           <span style={{
             fontSize: '11px', fontWeight: 600, padding: '3px 10px',
@@ -146,6 +181,15 @@ export default function DocDetail() {
           }}>
             {STATUS_LABEL[doc.status || 'active']}
           </span>
+          {/* Badge de versión */}
+          <span style={{
+            fontSize: '10px', fontWeight: 700, padding: '3px 9px',
+            borderRadius: 'var(--vs-radius-pill)',
+            background: version > 1 ? '#EEF1F8' : 'var(--vs-navy-subtle)',
+            color: 'var(--vs-navy-muted)'
+          }}>
+            v{version}
+          </span>
         </div>
 
         <div style={{ fontFamily: 'var(--vs-font-title)', fontSize: '24px', fontWeight: 700, color: 'var(--vs-navy)', marginBottom: '8px' }}>
@@ -154,6 +198,69 @@ export default function DocDetail() {
         <div style={{ fontSize: '13px', color: 'var(--vs-gray-mid)', marginBottom: '16px', lineHeight: 1.6 }}>
           {doc.descripcion}
         </div>
+
+        {/* Metadata chips: línea de negocio, frecuencia, criticidad, responsable */}
+        {(doc.linea_negocio || doc.frecuencia || doc.criticidad || doc.responsable) && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+            {doc.linea_negocio && (
+              <span style={{
+                fontSize: '11px', fontWeight: 600, padding: '4px 10px',
+                borderRadius: 'var(--vs-radius-pill)',
+                background: '#EEF1F8', color: 'var(--vs-navy)',
+                display: 'flex', alignItems: 'center', gap: '5px'
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <rect x="2" y="7" width="20" height="14" rx="2"/>
+                  <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+                </svg>
+                {doc.linea_negocio}
+              </span>
+            )}
+            {doc.frecuencia && (
+              <span style={{
+                fontSize: '11px', fontWeight: 600, padding: '4px 10px',
+                borderRadius: 'var(--vs-radius-pill)',
+                background: '#F0F4FF', color: '#3D5490',
+                display: 'flex', alignItems: 'center', gap: '5px'
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {FRECUENCIA_LABEL[doc.frecuencia] || doc.frecuencia}
+              </span>
+            )}
+            {doc.criticidad && (
+              <span style={{
+                fontSize: '11px', fontWeight: 700, padding: '4px 10px',
+                borderRadius: 'var(--vs-radius-pill)',
+                ...(CRITICIDAD_STYLE[doc.criticidad] || { background: '#EEF1F8', color: 'var(--vs-navy)' }),
+                display: 'flex', alignItems: 'center', gap: '5px'
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                {doc.criticidad}
+              </span>
+            )}
+            {doc.responsable && (
+              <span style={{
+                fontSize: '11px', fontWeight: 600, padding: '4px 10px',
+                borderRadius: 'var(--vs-radius-pill)',
+                background: '#FDF4FF', color: '#7C3AED',
+                display: 'flex', alignItems: 'center', gap: '5px'
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                {doc.responsable}
+              </span>
+            )}
+          </div>
+        )}
 
         {doc.tags?.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
@@ -169,15 +276,33 @@ export default function DocDetail() {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '0.5px solid #EEF1F8', paddingTop: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '0.5px solid #EEF1F8', paddingTop: '12px', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--vs-gray-mid)' }}>
             <span>Subido por <strong style={{ color: 'var(--vs-navy)' }}>{doc.author?.split('@')[0] || 'Equipo'}</strong></span>
             {doc.created_at && (
               <span>{new Date(doc.created_at).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn-secondary" onClick={() => setShowEdit(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Botón Actualizar documentación (solo scripts) */}
+            {isScript && content && (
+              <button
+                className="btn-secondary"
+                onClick={() => setShowUpdate(true)}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px', borderColor: 'var(--vs-navy)', color: 'var(--vs-navy)' }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                Actualizar doc
+              </button>
+            )}
+            <button
+              className="btn-secondary"
+              onClick={() => setShowEdit(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}
+            >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -185,7 +310,11 @@ export default function DocDetail() {
               Editar
             </button>
             {content && (
-              <button className="btn-secondary" onClick={handleDownloadMd} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
+              <button
+                className="btn-secondary"
+                onClick={handleDownloadMd}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}
+              >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
@@ -195,7 +324,11 @@ export default function DocDetail() {
               </button>
             )}
             {content && (
-              <button className="btn-primary" onClick={handleDownloadPdf} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}>
+              <button
+                className="btn-primary"
+                onClick={handleDownloadPdf}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', padding: '6px 14px' }}
+              >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                   <polyline points="14 2 14 8 20 8"/>
@@ -207,6 +340,85 @@ export default function DocDetail() {
         </div>
       </div>
 
+      {/* Historial de versiones */}
+      {history.length > 0 && (
+        <div style={{
+          background: 'var(--vs-white)', borderRadius: 'var(--vs-radius-lg)',
+          border: '0.5px solid #D0D5E8', marginBottom: '16px', overflow: 'hidden'
+        }}>
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            style={{
+              width: '100%', padding: '14px 20px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--vs-font-body)', fontSize: '13px', fontWeight: 600, color: 'var(--vs-navy)'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 8 12 12 14 14"/>
+              </svg>
+              Historial de versiones ({history.length} versión{history.length !== 1 ? 'es' : ''} anterior{history.length !== 1 ? 'es' : ''})
+            </span>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ transform: showHistory ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+            >
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {showHistory && (
+            <div style={{ borderTop: '0.5px solid #EEF1F8' }}>
+              {[...history].reverse().map((entry, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '16px 20px',
+                    borderBottom: idx < history.length - 1 ? '0.5px solid #EEF1F8' : 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span style={{
+                      fontSize: '11px', fontWeight: 700, padding: '2px 8px',
+                      borderRadius: 'var(--vs-radius-pill)',
+                      background: 'var(--vs-navy-subtle)', color: 'var(--vs-navy-muted)'
+                    }}>
+                      v{entry.version}
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--vs-gray-mid)' }}>
+                      {entry.updated_at ? new Date(entry.updated_at).toLocaleDateString('es-CL', {
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                      }) : '—'}
+                    </span>
+                    {entry.author && (
+                      <span style={{ fontSize: '11px', color: 'var(--vs-gray-mid)' }}>
+                        · por {entry.author.split('@')[0]}
+                      </span>
+                    )}
+                  </div>
+                  {entry.changelog && (
+                    <div style={{
+                      fontSize: '12px', color: 'var(--vs-navy-muted)', lineHeight: 1.6,
+                      background: '#FFFBEB', borderRadius: 'var(--vs-radius-md)',
+                      padding: '10px 14px', border: '1px solid #FCD34D'
+                    }}>
+                      <div style={{ fontWeight: 600, fontSize: '11px', color: '#92400E', marginBottom: '4px' }}>CHANGELOG</div>
+                      <div className="md-content" style={{ fontSize: '12px' }}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.changelog}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Contenido del documento */}
       <div style={{
         background: 'var(--vs-white)', borderRadius: 'var(--vs-radius-lg)',
         border: '0.5px solid #D0D5E8', padding: '32px'
@@ -227,6 +439,14 @@ export default function DocDetail() {
           editDoc={doc}
           onClose={() => setShowEdit(false)}
           onUpload={handleEdit}
+        />
+      )}
+
+      {showUpdate && (
+        <UpdateDocModal
+          doc={doc}
+          onClose={() => setShowUpdate(false)}
+          onUpdate={handleVersionUpdate}
         />
       )}
 

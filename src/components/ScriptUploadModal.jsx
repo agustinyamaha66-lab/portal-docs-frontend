@@ -1,11 +1,30 @@
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { generateScriptDocs } from '../services/claudeApi'
+import { useAuth } from '../contexts/AuthContext'
 
 const AREA_SUBTABS = [
   { value: 'cco', label: 'CCO' },
   { value: 'mejora_continua', label: 'Mejora continua' },
   { value: 'personas', label: 'Personas' },
   { value: 'finanzas', label: 'Finanzas' }
+]
+
+const LINEAS_NEGOCIO = ['HD', 'CATEX', 'Nodos', 'LAT', 'Mercado Libre', 'Falabella', 'Transversal']
+
+const FRECUENCIAS = [
+  { value: '3+/dia', label: '3+ ejecuciones/día' },
+  { value: 'diario', label: 'Diario' },
+  { value: 'semanal', label: 'Semanal' },
+  { value: 'ondemand', label: 'On demand' },
+  { value: 'triggers', label: 'Triggers configurados' },
+]
+
+const CRITICIDADES = [
+  { value: 'Alta', label: 'Alta', color: '#DC2626', bg: '#FEF2F2' },
+  { value: 'Media', label: 'Media', color: '#D97706', bg: '#FFFBEB' },
+  { value: 'Baja', label: 'Baja', color: '#16A34A', bg: '#F0FDF4' },
 ]
 
 const STEPS = ['upload', 'generating', 'preview']
@@ -63,6 +82,7 @@ function StepIndicator({ step }) {
 }
 
 export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) {
+  const { user } = useAuth()
   const [step, setStep] = useState('upload')
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
@@ -74,6 +94,15 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Nuevos campos
+  const [lineaNegocio, setLineaNegocio] = useState('')
+  const [responsable, setResponsable] = useState('')
+  const [frecuencia, setFrecuencia] = useState('')
+  const [criticidad, setCriticidad] = useState('')
+
+  // Preview mode en step 3
+  const [previewMode, setPreviewMode] = useState('edit')
+
   const handleGenerate = async () => {
     if (!scriptContent.trim() || !title.trim() || !desc.trim()) return
     setError('')
@@ -82,6 +111,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
       const { text, usage } = await generateScriptDocs(scriptContent)
       setGeneratedMd(text)
       setUsage(usage)
+      setPreviewMode('edit')
       setStep('preview')
     } catch (e) {
       setError(e.message || 'Error al generar la documentación. Intentá nuevamente.')
@@ -101,7 +131,11 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
         tags: [],
         status,
         content: generatedMd,
-        filename
+        filename,
+        linea_negocio: lineaNegocio || null,
+        responsable: responsable || null,
+        frecuencia: frecuencia || null,
+        criticidad: criticidad || null,
       })
       onClose()
     } catch (e) {
@@ -120,7 +154,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
       <div style={{
         background: 'var(--vs-white)', borderRadius: 'var(--vs-radius-lg)',
         padding: '28px', width: '100%',
-        maxWidth: step === 'preview' ? '720px' : '500px',
+        maxWidth: step === 'preview' ? '820px' : '540px',
         maxHeight: '92vh', overflowY: 'auto',
         transition: 'max-width 0.3s'
       }}>
@@ -160,7 +194,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
                 onChange={e => setScriptContent(e.target.value)}
                 placeholder={`# Pegá el código de tu script acá\n# Funciona con Python, JavaScript, SQL, Shell, Go, Ruby, R y más...`}
                 style={{
-                  minHeight: '200px', resize: 'vertical',
+                  minHeight: '180px', resize: 'vertical',
                   fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.65,
                   background: scriptContent ? '#F8F9FC' : 'transparent',
                   border: `1.5px solid ${scriptContent.trim() ? 'var(--vs-success)' : '#D0D5E8'}`,
@@ -195,6 +229,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
               />
             </div>
 
+            {/* Fila: Área + Estado */}
             <div style={{ display: 'flex', gap: '12px' }}>
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>Área</label>
@@ -208,6 +243,70 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
                   <option value="active">Activo</option>
                   <option value="dev">En desarrollo</option>
                   <option value="inactive">Inactivo</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Fila: Línea de negocio + Responsable */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Línea de negocio</label>
+                <select value={lineaNegocio} onChange={e => setLineaNegocio(e.target.value)}>
+                  <option value="">Seleccionar...</option>
+                  {LINEAS_NEGOCIO.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>
+                  Responsable
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    value={responsable}
+                    onChange={e => setResponsable(e.target.value)}
+                    placeholder="Nombre y cargo"
+                  />
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => setResponsable(user.email?.split('@')[0] || '')}
+                      style={{
+                        position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '10px', fontWeight: 600, color: 'var(--vs-navy-muted)',
+                        padding: '2px 6px', borderRadius: 'var(--vs-radius-pill)',
+                        background: 'var(--vs-navy-subtle)'
+                      }}
+                    >
+                      Soy yo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Fila: Frecuencia + Criticidad */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Frecuencia de ejecución</label>
+                <select value={frecuencia} onChange={e => setFrecuencia(e.target.value)}>
+                  <option value="">Seleccionar...</option>
+                  {FRECUENCIAS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>Criticidad ante fallos</label>
+                <select
+                  value={criticidad}
+                  onChange={e => setCriticidad(e.target.value)}
+                  style={criticidad ? {
+                    color: CRITICIDADES.find(c => c.value === criticidad)?.color,
+                    fontWeight: 700,
+                    borderColor: CRITICIDADES.find(c => c.value === criticidad)?.color
+                  } : {}}
+                >
+                  <option value="">Seleccionar...</option>
+                  {CRITICIDADES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
             </div>
@@ -292,7 +391,7 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              Documentación generada. Revisá el contenido antes de publicar.
+              Documentación generada. Revisá y editá antes de publicar.
             </div>
 
             {usage && (
@@ -315,20 +414,57 @@ export default function ScriptUploadModal({ defaultSubtab, onClose, onUpload }) 
               </div>
             )}
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={labelStyle}>Contenido generado (editable)</label>
+            {/* Toggle Editar / Vista previa */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label style={labelStyle}>Contenido generado</label>
+              <div style={{ display: 'flex', background: 'var(--vs-navy-subtle)', borderRadius: 'var(--vs-radius-pill)', padding: '2px' }}>
+                {[
+                  { key: 'edit', label: '✏️  Editar' },
+                  { key: 'preview', label: '👁  Vista previa' }
+                ].map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => setPreviewMode(m.key)}
+                    style={{
+                      fontSize: '11px', fontWeight: 600, padding: '4px 14px',
+                      borderRadius: 'var(--vs-radius-pill)', border: 'none', cursor: 'pointer',
+                      background: previewMode === m.key ? 'var(--vs-navy)' : 'transparent',
+                      color: previewMode === m.key ? 'white' : 'var(--vs-navy-muted)',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {previewMode === 'edit' ? (
               <textarea
                 value={generatedMd}
                 onChange={e => setGeneratedMd(e.target.value)}
                 style={{
-                  width: '100%', minHeight: '340px', resize: 'vertical',
+                  width: '100%', minHeight: '380px', resize: 'vertical',
                   fontFamily: 'monospace', fontSize: '12px', lineHeight: 1.65,
                   background: '#F8F9FC', border: '1px solid #D0D5E8',
                   borderRadius: 'var(--vs-radius-md)', padding: '14px',
-                  color: 'var(--vs-navy)', boxSizing: 'border-box'
+                  color: 'var(--vs-navy)', boxSizing: 'border-box',
+                  marginBottom: '12px'
                 }}
               />
-            </div>
+            ) : (
+              <div
+                className="md-content"
+                style={{
+                  minHeight: '380px', border: '1px solid #D0D5E8',
+                  borderRadius: 'var(--vs-radius-md)', padding: '20px',
+                  background: '#FAFBFE', marginBottom: '12px',
+                  overflowY: 'auto'
+                }}
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{generatedMd}</ReactMarkdown>
+              </div>
+            )}
 
             {error && (
               <div style={{

@@ -123,7 +123,13 @@ export default function Home() {
       tags: payload.tags,
       status: payload.status,
       content: payload.content,
-      author: user?.email
+      author: user?.email,
+      linea_negocio: payload.linea_negocio || null,
+      responsable: payload.responsable || null,
+      frecuencia: payload.frecuencia || null,
+      criticidad: payload.criticidad || null,
+      version: 1,
+      version_history: []
     })
     if (error) throw new Error('Error al subir')
     setToast({ message: '✓ Documento publicado correctamente', type: 'success' })

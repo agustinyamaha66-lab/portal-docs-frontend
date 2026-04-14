@@ -217,6 +217,35 @@ async function callClaude(userMessage, maxTokens = 4096) {
   return { text: data.content[0].text, usage: { input_tokens, output_tokens, total, costUSD } }
 }
 
+// ─── PROMPT PARA ACTUALIZAR DOCUMENTACIÓN DE SCRIPTS ───────────────────────
+// Compara documentación existente con nuevo script y genera versión actualizada + changelog
+const buildUpdateDocPrompt = (oldContent, newScript) =>
+  `Eres un experto en documentación técnica. Tu tarea es actualizar la documentación existente de un script basándote en la nueva versión del código.
+
+DOCUMENTACIÓN ACTUAL:
+\`\`\`markdown
+${oldContent}
+\`\`\`
+
+NUEVO SCRIPT A DOCUMENTAR:
+\`\`\`
+${newScript}
+\`\`\`
+
+Genera una respuesta en formato JSON con la siguiente estructura EXACTA:
+{
+  "updated_md": "documentación actualizada completa en Markdown",
+  "changelog": "lista de cambios en Markdown (bullets con lo que cambió, agregó o eliminó)"
+}
+
+INSTRUCCIONES CRÍTICAS:
+1. Responde ÚNICAMENTE con el JSON, sin texto adicional antes ni después
+2. El JSON debe ser válido y parseable
+3. En "updated_md": documentación técnica completa actualizada, manteniendo estructura y estilo
+4. En "changelog": lista de bullets (- texto) con cambios específicos detectados
+5. Si no detectás cambios significativos, indicarlo en el changelog
+6. Sé específico con los cambios reales, nunca genérico`
+
 // ─── EXPORTS ────────────────────────────────────────────────────────────────
 
 export async function generateScriptDocs(scriptContent) {
@@ -225,4 +254,18 @@ export async function generateScriptDocs(scriptContent) {
 
 export async function generateProcessDocs(formData) {
   return callClaude(buildProcessPrompt(formData), 3500)
+}
+
+export async function generateUpdateDocs(oldContent, newScript) {
+  const result = await callClaude(buildUpdateDocPrompt(oldContent, newScript), 6000)
+  // Extraer JSON de la respuesta (puede venir con texto extra en casos límite)
+  const jsonMatch = result.text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Claude no devolvió un JSON válido. Intentá nuevamente.')
+  const parsed = JSON.parse(jsonMatch[0])
+  if (!parsed.updated_md || !parsed.changelog) throw new Error('Respuesta incompleta de Claude.')
+  return {
+    updatedMd: parsed.updated_md,
+    changelog: parsed.changelog,
+    usage: result.usage
+  }
 }
